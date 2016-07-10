@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    <http:listener-config name="api-httpListenerConfig" host="0.0.0.0" port="8081" doc:name="HTTP Listener Configuration"/>
+    <apikit:config name="api-config" raml="api.raml" consoleEnabled="false" doc:name="Router"/>
+    <db:oracle-config name="Oracle_Configuration" host="localhost" port="1521" instance="XE" user="DEMO" password="demo" doc:name="Oracle Configuration"/>
+    <db:oracle-config name="AmazonRDS" host="oracleordersdemo.cyzjfycxn0mv.us-east-1.rds.amazonaws.com" port="1521" instance="ORCL" user="ksatya" password="kakinada" doc:name="Oracle Configuration"/>
+
+    <flow name="api-main">
+        <http:listener config-ref="api-httpListenerConfig" path="/api/*" doc:name="HTTP"/>
+        <apikit:router config-ref="api-config" doc:name="APIkit Router"/>
+        <exception-strategy ref="api-apiKitGlobalExceptionMapping" doc:name="Reference Exception Strategy"/>
+    </flow>
+    <flow name="api-console">
+        <http:listener config-ref="api-httpListenerConfig" path="/console/*" doc:name="HTTP"/>
+        <apikit:console config-ref="api-config" doc:name="APIkit Console"/>
+    </flow>
+    <flow name="get:/orders:api-config">
+        <set-variable variableName="orderID" value="#[message.inboundProperties.get('http.query.params').orderID]" doc:name="Set orderID"/>
+        <db:select config-ref="AmazonRDS" doc:name="Data Store">
+            <db:parameterized-query><![CDATA[select a.ORDERID, a.CUSTOMERNAME,c.ITEMNAME,b.ITEMCOUNT from orders a, orderitems b, items c where a.ORDERID = #[flowVars.orderID] and a.ORDERID=b.ORDERID and b.ITEMID = c.ITEMID]]></db:parameterized-query>
+        </db:select>
+        <choice doc:name="Check if OrderId is in Data Store">
+        	<when expression="#[payload.isEmpty() == false]">
+                <json:object-to-json-transformer doc:name="Success Response"/>
+        	</when>
+            <otherwise>
+                <set-payload value="{ &quot;status&quot;: &quot;failure&quot;, &quot;description&quot;: &quot;order id #[flowVars.orderID] not found in data strore&quot;}" doc:name="Set Failure Response"/>
+            </otherwise>
+        </choice>
+
+    </flow>
+    <apikit:mapping-exception-strategy name="api-apiKitGlobalExceptionMapping">
+        <apikit:mapping statusCode="404">
+            <apikit:exception value="org.mule.module.apikit.exception.NotFoundException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Resource not found&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="405">
+            <apikit:exception value="org.mule.module.apikit.exception.MethodNotAllowedException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Method not allowed&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="415">
+            <apikit:exception value="org.mule.module.apikit.exception.UnsupportedMediaTypeException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Unsupported media type&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="406">
+            <apikit:exception value="org.mule.module.apikit.exception.NotAcceptableException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Not acceptable&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="400">
+            <apikit:exception value="org.mule.module.apikit.exception.BadRequestException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Bad request&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+    </apikit:mapping-exception-strategy>
+</mule>

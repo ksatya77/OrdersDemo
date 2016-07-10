@@ -1,0 +1,26 @@
+#%RAML 0.8
+title: OrderDemo
+version: 1.0
+#baseUri: http://server/api
+baseUri: https://mocksvc.mulesoft.com/mocks/29d709d3-c32e-4509-bcaf-a436f98a2373/api
+/orders:
+  get:
+    description: Get Order Details based on id
+    responses:
+      200:
+        body:
+          application/json:
+            example: |
+              [
+                {
+                  "OrderID: : "123",
+                  "PlacementDate" : "1/1/2016",
+                  "CustomerName" : "Murthy"
+                }
+              ]
+    queryParameters:
+      orderID: 
+        description: ID of the order that is needed
+        pattern: (?:\d*)?\d+
+        required: true
+        example: "123"
