@@ -7,10 +7,11 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
 http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
     <http:listener-config name="api-httpListenerConfig" host="0.0.0.0" port="8081" doc:name="HTTP Listener Configuration"/>
-    <apikit:config name="api-config" raml="api.raml" consoleEnabled="false" doc:name="Router"/>
+    <apikit:config name="api-config" raml="api.raml" consoleEnabled="false" doc:name="Router">
+        <apikit:flow-mapping resource="/orders" action="get" flow-ref="get:/orders:api-config"/>
+    </apikit:config>
     <db:oracle-config name="Oracle_Configuration" host="localhost" port="1521" instance="XE" user="DEMO" password="demo" doc:name="Oracle Configuration"/>
     <db:oracle-config name="AmazonRDS" host="oracleordersdemo.cyzjfycxn0mv.us-east-1.rds.amazonaws.com" port="1521" instance="ORCL" user="ksatya" password="kakinada" doc:name="Oracle Configuration"/>
-
     <flow name="api-main">
         <http:listener config-ref="api-httpListenerConfig" path="/api/*" doc:name="HTTP"/>
         <apikit:router config-ref="api-config" doc:name="APIkit Router"/>
@@ -22,18 +23,17 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
     </flow>
     <flow name="get:/orders:api-config">
         <set-variable variableName="orderID" value="#[message.inboundProperties.get('http.query.params').orderID]" doc:name="Set orderID"/>
-        <db:select config-ref="AmazonRDS" doc:name="Data Store">
+        <db:select config-ref="Oracle_Configuration" doc:name="Data Store">
             <db:parameterized-query><![CDATA[select a.ORDERID, a.CUSTOMERNAME,c.ITEMNAME,b.ITEMCOUNT from orders a, orderitems b, items c where a.ORDERID = #[flowVars.orderID] and a.ORDERID=b.ORDERID and b.ITEMID = c.ITEMID]]></db:parameterized-query>
         </db:select>
-        <choice doc:name="Check if OrderId is in Data Store">
-        	<when expression="#[payload.isEmpty() == false]">
+        <choice doc:name="Choice">
+            <when expression="#[payload.isEmpty() == false]">
                 <json:object-to-json-transformer doc:name="Success Response"/>
-        	</when>
+            </when>
             <otherwise>
-                <set-payload value="{ &quot;status&quot;: &quot;failure&quot;, &quot;description&quot;: &quot;order id #[flowVars.orderID] not found in data strore&quot;}" doc:name="Set Failure Response"/>
+                <set-payload value="{&quot;status&quot;:&quot;failure&quot;}" doc:name="Failure Response"/>
             </otherwise>
         </choice>
-
     </flow>
     <apikit:mapping-exception-strategy name="api-apiKitGlobalExceptionMapping">
         <apikit:mapping statusCode="404">
