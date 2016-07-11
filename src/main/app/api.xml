@@ -23,7 +23,7 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
     </flow>
     <flow name="get:/orders:api-config">
         <set-variable variableName="orderID" value="#[message.inboundProperties.get('http.query.params').orderID]" doc:name="Set orderID"/>
-        <db:select config-ref="Oracle_Configuration" doc:name="Data Store">
+        <db:select config-ref="AmazonRDS" doc:name="Data Store">
             <db:parameterized-query><![CDATA[select a.ORDERID, a.CUSTOMERNAME,c.ITEMNAME,b.ITEMCOUNT from orders a, orderitems b, items c where a.ORDERID = #[flowVars.orderID] and a.ORDERID=b.ORDERID and b.ITEMID = c.ITEMID]]></db:parameterized-query>
         </db:select>
         <choice doc:name="Choice">
@@ -31,9 +31,15 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
                 <json:object-to-json-transformer doc:name="Success Response"/>
             </when>
             <otherwise>
-                <set-payload value="{&quot;status&quot;:&quot;failure&quot;}" doc:name="Failure Response"/>
+                <set-payload value="{&quot;status&quot;:&quot;failure&quot;, &quot;description&quot;:&quot;OrderID #[flowVars.orderID] not found in Database&quot;}" doc:name="Failure Response"/>
             </otherwise>
         </choice>
+        <choice-exception-strategy doc:name="Choice Exception Strategy">
+            <catch-exception-strategy when="#[exception.causedBy(java.sql.SQLException)]" doc:name="Catch Database Exceptions">
+                <logger message="Database Exception" level="INFO" doc:name="Logger"/>
+                <set-payload value="{&quot;status&quot;:&quot;failure&quot;, &quot;description&quot;:&quot;Database is not reachable&quot;}" mimeType="application/json" doc:name="Set Failure Response"/>
+            </catch-exception-strategy>
+        </choice-exception-strategy>
     </flow>
     <apikit:mapping-exception-strategy name="api-apiKitGlobalExceptionMapping">
         <apikit:mapping statusCode="404">
